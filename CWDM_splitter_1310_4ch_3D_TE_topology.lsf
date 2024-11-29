@@ -1,0 +1,139 @@
+switchtolayout;
+selectall;
+delete;
+
+## SIM PARAMS
+num_wg = 4;
+wg_width = 0.41e-6;
+out_wg_dist = 1e-6;
+mode_width = 3*wg_width;
+total_wg_h = num_wg*wg_width + (num_wg-1)*out_wg_dist;
+
+opt_size_x=6e-6;
+opt_size_y=6e-6;
+
+size_x=opt_size_x+1e-6;
+size_y=opt_size_y+1e-6;
+size_z=1.2e-6;
+
+wg_material = 'Si (Silicon) - Palik';
+bg_material = 'SiO2 (Glass) - Palik';
+
+dx = 20e-9;
+
+addrect;
+set('name','input wg');
+set('x min',-size_x);
+set('x max',-opt_size_x/2 + 5e-7);
+set('y',0);
+set('y span',wg_width);
+set('z',0);
+set('z span',220e-9);
+set('material',wg_material);
+
+for( i=1:num_wg ) {
+  addrect;
+  set('name','output wg '+num2str(i));
+  set('x min',opt_size_x/2 - 5e-7);
+  set('x max',size_x);
+  set('y',-total_wg_h/2 + (wg_width/2) + (i-1)*(out_wg_dist+wg_width));
+  set('y span',wg_width);
+  set('z',0);
+  set('z span',220e-9);
+  set('material',wg_material);
+}
+
+addmode;
+set('direction','Forward');
+set('injection axis','x-axis');
+set('y',0);
+set('y span',mode_width);
+set('x',-size_x/2+0.2e-6);
+set('z',0);
+set('z span',1.2e-6);
+set('center wavelength',1290e-9);
+set('wavelength span',0);
+set('mode selection','fundamental TE mode');
+
+addfdtd;
+set('dimension','3D');
+set('background material',bg_material);
+set('mesh accuracy',4);
+set('x min',-size_x/2);
+set('x max',size_x/2);
+set('y min',-size_y/2);
+set('y max',size_y/2);
+set('z min',-size_z/2);
+set('z max',size_z/2);
+set('force symmetric y mesh',1);
+set('force symmetric z mesh',1);
+#set('z min bc','Symmetric');
+set('y min bc','Anti-Symmetric');
+set('auto shutoff min',1e-6);
+set('simulation time',3000e-15);
+setnamed("FDTD", "express mode", true);
+setresource("FDTD","GPU", true);
+
+addpower;
+set('name','opt_fields');
+set('monitor type','3D');
+set('x',0);
+set('x span',opt_size_x);
+set('y min',-opt_size_y/2);
+set('y max',opt_size_y/2);
+set('z',0);
+set('z span',220e-9);
+
+for( i=1:num_wg ) { 
+  addpower;
+  set('name','fom_'+num2str(i));
+  set('monitor type','2D X-normal');
+  set('x', size_x/2-0.2e-6);
+  set('y',-total_wg_h/2 + (wg_width/2) + (i-1)*(out_wg_dist+wg_width));
+  set('y span',mode_width);
+  set('z',0);
+  set('z span',1.2e-6);
+
+  addmesh;
+  set('name','fom_'+num2str(i)+'_mesh');
+  set('override x mesh',true);
+  set('dx',dx);
+  set('override y mesh',false);
+  set('override z mesh',false);
+  set('x', size_x/2-0.2e-6);
+  set('x span',2*dx);
+  set('y',-total_wg_h/2 + (wg_width/2) + (i-1)*(out_wg_dist+wg_width));
+  set('y span',mode_width);
+  set('z',0);
+  set('z span',1.2e-6);
+}   
+
+## Global index monitor for visualization (export to VTK)
+addindex;
+set('name','global_index');
+set('monitor type','2D Z-normal');
+set('x min',-size_x/2);
+set('x max',size_x/2);
+set('y min',-size_y/2);
+set('y max',size_y/2);
+set('z',0);
+# set('z span',220e-9);
+
+## Optional: Naive design which can be used as initial guess
+addstructuregroup;
+set("name","initial_guess");
+for( i=1:num_wg ) { 
+addwaveguide;
+set("name","bend"+num2str(i));
+set("base width",410e-9);
+set("base height",220e-9);
+set("base angle",90);
+poles = [-opt_size_x/2,0;
+          0,0;
+          0,-total_wg_h/2 + (wg_width/2) + (i-1)*(out_wg_dist+wg_width);
+          opt_size_x/2,-total_wg_h/2 + (wg_width/2) + (i-1)*(out_wg_dist+wg_width)];
+set("poles",poles);
+set('z',0);
+set('material',wg_material);
+addtogroup("initial_guess");
+}
